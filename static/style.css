@@ -1,0 +1,159 @@
+/* General body styles */
+body {
+  background-color: #1e1e1e;
+  color: #f8f8f8;
+  font-family: monospace;
+  margin: 0;
+  padding: 0;
+}
+
+/* Container */
+.container {
+  width: 80%;
+  margin: 20px auto;
+  padding: 10px;
+}
+
+/* Heading */
+h2 {
+  text-align: center;
+  color: #00ff88;
+  margin-bottom: 10px;
+}
+
+/* Terminal window */
+.terminal {
+  background-color: #111;
+  border-radius: 8px;
+  border: 1px solid #333;
+  padding: 15px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow-y: auto;
+}
+
+/* Output area */
+.output {
+  overflow-y: auto;
+  max-height: 350px;
+  padding-bottom: 10px;
+  font-size: 1em;
+  line-height: 1.4;
+}
+
+/* Input line */
+.input-line {
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+  position: relative;
+}
+
+/* Prompt */
+.prompt {
+  color: #00ff88;
+  margin-right: 5px;
+}
+
+/* Command input box */
+#commandInput {
+  background-color: transparent;
+  border: none;
+  outline: none;
+  color: #f8f8f8;
+  font-size: 1em;
+  font-family: monospace;
+  caret-color: #00ff88;
+  flex-grow: 1;
+  height: 1.85em;
+  line-height: 1.4;
+  position: relative;
+  padding-left: 0.15em;
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+/* Ghost inline suggestion */
+.autocomplete-container {
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+}
+
+.ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: #5c6368;
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  white-space: pre;
+  overflow: hidden;
+  width: 100%;
+  padding-left: 0.15em;
+}
+
+/* Command line display */
+.cmd-line {
+  margin-bottom: 2px;
+  white-space: pre-wrap;
+}
+
+/* Cat input lines */
+.cat-line,
+.cat-prompt {
+  margin: 0;
+  padding: 0;
+}
+
+/* Command output */
+.result {
+  color: #ccc;
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: monospace;
+}
+
+/* Auto-complete suggestion box (dropdown) */
+.suggestions {
+  display: none;
+  position: absolute;
+  background: #272822;
+  border: 1px solid #3c3f41;
+  color: #fff;
+  width: 100%;
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 10;
+  font-size: 1em;
+}
+
+.suggestions.show {
+  display: block;
+}
+
+.suggestion-item {
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.suggestion-item.active,
+.suggestion-item:hover {
+  background: #49483e;
+  color: #ffd700;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .container {
+    width: 97%;
+  }
+  .terminal {
+    min-height: 280px;
+    font-size: 0.95em;
+  }
+}

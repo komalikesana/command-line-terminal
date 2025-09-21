@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Python Terminal</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <h2>Python Terminal</h2>
+    <div class="terminal">
+      <div id="output" class="output"></div>
+      <div class="input-line">
+        <span id="prompt" class="prompt"></span>
+        <div class="autocomplete-container">
+          <input type="text" id="commandInput" autocomplete="off" autofocus spellcheck="false" />
+          <span id="ghostSuggestion" class="ghost"></span>
+        </div>
+        <div id="suggestionBox" class="suggestions"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const input = document.getElementById("commandInput");
+const output = document.getElementById("output");
+const suggestionBox = document.getElementById("suggestionBox");
+const ghost = document.getElementById("ghostSuggestion");
+
+let catMode = false;
+let catFilename = "";
+let catAppend = false;
+let catBuffer = "";
+
+let commandHistory = [];
+let historyIndex = -1;
+
+const commandsList = [
+  "ls", "cd", "pwd", "mkdir", "rm", "rmdir", "touch",
+  "cat", "echo", "mv", "cp", "cpu", "mem", "ps", "man", "uptime"
+];
+
+let suggestions = [];
+let suggestionIndex = -1;
+let currentSuggestion = "";
+
+async function updatePrompt() {
+  try {
+    const response = await fetch('/cwd');
+    const data = await response.json();
+    document.getElementById("prompt").textContent = data.cwd + " $";
+  } catch {
+    document.getElementById("prompt").textContent = "$";
+  }
+}
+
+function showCommand(cmd) {
+  const prompt = document.getElementById("prompt").textContent;
+  output.innerHTML += `<div class="cmd-line"><span class="prompt">${prompt}</span> ${cmd}</div>`;
+  output.scrollTop = output.scrollHeight;
+}
+
+function updateGhost() {
+  if (!input.value) {
+    ghost.textContent = "";
+    ghost.style.display = "none";
+    currentSuggestion = "";
+    return;
+  }
+  const val = input.value;
+  const match = commandsList.find(c => c.startsWith(val) && c !== val);
+  if (match) {
+    ghost.textContent = match.slice(val.length);
+    ghost.style.display = "inline";
+    currentSuggestion = match;
+  } else {
+    ghost.textContent = "";
+    ghost.style.display = "none";
+    currentSuggestion = "";
+  }
+}
+
+function fillSuggestions(list) {
+  if (!list.length) {
+    suggestionBox.innerHTML = "";
+    suggestionBox.classList.remove("show");
+    return;
+  }
+  suggestionBox.innerHTML = list.map((s, idx) =>
+    `<div class="suggestion-item${suggestionIndex === idx ? " active" : ""}">${s}</div>`
+  ).join('');
+  suggestionBox.classList.add("show");
+}
+
+function getSuggestions(prefix) {
+  return [...new Set([...commandHistory, ...commandsList])].filter(cmd => cmd.startsWith(prefix));
+}
+
+function updateSuggestions() {
+  const prefix = input.value.trim().split(' ').pop();
+  if (!prefix) {
+    suggestions = [];
+    suggestionBox.innerHTML = "";
+    suggestionBox.classList.remove("show");
+    return;
+  }
+  suggestions = getSuggestions(prefix);
+  suggestionIndex = suggestions.length ? 0 : -1;
+  fillSuggestions(suggestions);
+}
+
+function applySuggestion() {
+  if (suggestionIndex === -1 || !suggestions.length) return;
+  let parts = input.value.trim().split(' ');
+  parts[parts.length - 1] = suggestions[suggestionIndex];
+  input.value = parts.join(' ') + ' ';
+  suggestionBox.innerHTML = "";
+  suggestionBox.classList.remove("show");
+  input.focus();
+  updateGhost();
+}
+
+function applyGhost() {
+  if (!currentSuggestion) return;
+  input.value = currentSuggestion;
+  ghost.textContent = "";
+  ghost.style.display = "none";
+  currentSuggestion = "";
+}
+
+suggestionBox.addEventListener('mousedown', function(event) {
+  if (event.target.classList.contains('suggestion-item')) {
+    const children = [...suggestionBox.children];
+    suggestionIndex = children.indexOf(event.target);
+    applySuggestion();
+  }
+});
+
+suggestionBox.addEventListener('mouseover', function(event) {
+  if (event.target.classList.contains('suggestion-item')) {
+    [...suggestionBox.children].forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+    suggestionIndex = [...suggestionBox.children].indexOf(event.target);
+  }
+});
+
+document.addEventListener('mousedown', function(event) {
+  if (!input.contains(event.target) && !suggestionBox.contains(event.target)) {
+    suggestionBox.innerHTML = "";
+    suggestionBox.classList.remove("show");
+  }
+});
+
+input.addEventListener('input', function() {
+  if (catMode) return;
+  updateGhost();
+  updateSuggestions();
+});
+
+input.addEventListener('keydown', async function(event) {
+  if (catMode) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const line = input.value;
+      input.value = '';
+      catBuffer += line + '\n';
+      output.innerHTML += `<div class="cat-line">${line}</div>`;
+      output.scrollTop = output.scrollHeight;
+      if (line === '__END__') {
+        catBuffer = catBuffer.slice(0, -('__END__\n'.length)); // strip termination line
+        const res = await fetch('/cat_write', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ filename: catFilename, content: catBuffer, append: catAppend }),
+        });
+        const data = await res.json();
+        output.innerHTML += `<pre class="result">${data.result}</pre>`;
+        output.scrollTop = output.scrollHeight;
+        catBuffer = '';
+        catMode = false;
+        updatePrompt();
+      }
+    }
+    return;
+  }
+
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    if (commandHistory.length === 0) return;
+    if (event.key === 'ArrowUp') {
+      if (historyIndex === -1) historyIndex = commandHistory.length - 1;
+      else if (historyIndex > 0) historyIndex--;
+    } else {
+      if (historyIndex === -1) return;
+      if (historyIndex < commandHistory.length - 1) historyIndex++;
+      else {
+        historyIndex = -1;
+        input.value = '';
+        updateGhost();
+        updateSuggestions();
+        return;
+      }
+    }
+    input.value = commandHistory[historyIndex];
+    event.preventDefault();
+    updateGhost();
+    updateSuggestions();
+    return;
+  }
+
+  if (event.key === 'Tab' || event.key === 'ArrowRight') {
+    if (currentSuggestion) {
+      event.preventDefault();
+      applyGhost();
+      return;
+    }
+    if (suggestionBox.classList.contains('show') && suggestions.length && suggestionIndex !== -1) {
+      event.preventDefault();
+      applySuggestion();
+      return;
+    }
+  }
+
+  if (event.key === 'Enter') {
+    if (suggestionBox.classList.contains('show') && suggestions.length) {
+      event.preventDefault();
+      applySuggestion();
+      return;
+    }
+    let cmd = input.value.trim();
+    if (!cmd) return;
+    input.value = '';
+    suggestionBox.innerHTML = '';
+    suggestionBox.classList.remove('show');
+    ghost.textContent = '';
+    ghost.style.display = 'none';
+    currentSuggestion = '';
+
+    // Handle multiline cat input
+    if (/^cat\s+(>|>>)\s+.+/.test(cmd)) {
+      const parts = cmd.match(/^cat\s+(>|>>)\s+(.+)/);
+      catFilename = parts[2];
+      catAppend = parts[1] === '>>';
+      catBuffer = '';
+      catMode = true;
+      output.innerHTML += '<div class="cat-prompt">Enter text (type __END__ to finish)...</div>';
+      output.scrollTop = output.scrollHeight;
+      return;
+    }
+
+    commandHistory.push(cmd);
+    historyIndex = -1;
+    showCommand(cmd);
+
+    // Parse NLP command first
+    const parseRes = await fetch('/parse_nlp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd }),
+    });
+    const parseData = await parseRes.json();
+
+    // Then send parsed command to execute
+    const runRes = await fetch('/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: parseData.parsed }),
+    });
+    const runData = await runRes.json();
+
+    output.innerHTML += `<pre class="result">${runData.result}</pre>`;
+    output.scrollTop = output.scrollHeight;
+    updatePrompt();
+  }
+});
+
+updatePrompt();
+</script>
+</body>
+</html>
